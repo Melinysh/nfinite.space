@@ -1,7 +1,7 @@
 package main
 
 import (
-	"crypto/sha1"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"flag"
@@ -15,11 +15,16 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-// File object
-type File struct {
+// FileMetaData
+type FileMetaData struct {
 	name     string
 	modified time.Time
-	data     []byte
+}
+
+// File object
+type File struct {
+	FileMetaData
+	data []byte
 }
 
 // FilePart object
@@ -33,16 +38,25 @@ func fileFromMetaData(metadata map[string]interface{}) File {
 	seconds, _ := strconv.ParseInt(metadata["dateModified"].(string), 10, 64)
 	dateMod := time.Unix(seconds, 0)
 	name := metadata["name"].(string)
-	return File{name, dateMod, []byte("")}
+	return File{FileMetaData{name, dateMod}, []byte("")}
 }
 
 // Client object
 type Client struct {
-	conn *websocket.Conn
+	username string
+	password string
 }
 
-var clients = []Client{}
+func clientFromMetaData(metadata map[string]interface{}) Client {
+	username := metadata["name"].(string)
+	password := metadata["pass"].(string)
+	password = hash(password)
+	return Client{username, password}
+}
 
+// Maps client username to connection
+var connections = map[string]*websocket.Conn{}
+var database = NewDatabase()
 var addr = flag.String("addr", "0.0.0.0:8080", "http service address")
 
 var upgrader = websocket.Upgrader{
@@ -62,12 +76,14 @@ func upgradeToWebsocket(w http.ResponseWriter, r *http.Request) (*websocket.Conn
 	return c, err
 }
 
-func register(w http.ResponseWriter, r *http.Request) {
+func listen(w http.ResponseWriter, r *http.Request) {
 	c, err := upgradeToWebsocket(w, r)
 	if err != nil {
 		return
 	}
-	defer c.Close()
+	defer func() {
+		c.Close()
+	}()
 	for {
 		mt, message, err := c.ReadMessage()
 		if err != nil {
@@ -87,14 +103,26 @@ func register(w http.ResponseWriter, r *http.Request) {
 				metadata := m["fileMeta"].(map[string]interface{})
 				f := fileFromMetaData(metadata)
 				getFileUpload(c, f)
-			} else if t == "status" {
-				log.Println("DEBUG: status message is:", message)
+			} else if t == "registration" {
+				metadata := m["userMeta"].(map[string]interface{})
+				client := clientFromMetaData(metadata)
+				connections[client.username] = c
+				sendUsersFileMetaData(c)
+				database.AddClient(client)
+				defer delete(connections, client)
 			} else {
 				log.Println("type: unknown json type:", t)
 			}
 		} else {
 			log.Println("Not text message")
 		}
+	}
+}
+
+func sendUsersFileMetaData(c *websocket.Conn) {
+	json := "{ \"files\" : [ \"hello.txt\", \"lol.jpg\"] }" // TODO: fetch user's actual files.
+	if err := c.WriteMessage(websocket.BinaryMessage, []byte(json)); err != nil {
+		log.Println("send users files metadata:", err)
 	}
 }
 
@@ -155,7 +183,7 @@ func sendFile(c *websocket.Conn, f File) {
 
 // Compiles the original file from the file parts, assumes fps is sorted by index
 func sendFileFromParts(c *websocket.Conn, fps []FilePart, original File) {
-	file := File{original.name, original.modified, []byte("")}
+	file := File{FileMetaData{original.name, original.modified}, []byte("")}
 	for _, fp := range fps {
 		file.data = append(file.data, fp.data...)
 	}
@@ -163,7 +191,7 @@ func sendFileFromParts(c *websocket.Conn, fps []FilePart, original File) {
 }
 
 func hash(s string) string {
-	h := sha1.New()
+	h := sha256.New()
 	io.WriteString(h, s)
 	return hex.EncodeToString(h.Sum(nil))
 }
@@ -171,6 +199,6 @@ func hash(s string) string {
 func main() {
 	flag.Parse()
 	log.SetFlags(0)
-	http.HandleFunc("/websockets", register)
+	http.HandleFunc("/websockets", listen)
 	log.Fatal(http.ListenAndServe(*addr, nil))
 }
