@@ -250,6 +250,18 @@ func (db *Database) GetFile(name string, c Client) File {
 	return f
 }
 
+func (db *Database) DoesFileExist(f File, c Client) bool {
+	dbC := db.dbClientForClient(c)
+	var count uint64
+	const countSQL = `
+	SELECT COUNT(id) FROM File WHERE name=$1 AND ownerId=$2`
+	if err := db.QueryRow(countSQL, f.name, dbC.id).Scan(&count); err != nil {
+		log.Println("checking if file saved:", err)
+		return false
+	}
+	return count > 0
+}
+
 func (db *Database) InsertFile(f File, c Client) {
 	dbC := db.dbClientForClient(c)
 	db.insertFileForDbClient(f, dbC)

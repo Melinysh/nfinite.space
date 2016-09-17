@@ -184,6 +184,9 @@ func getFileUpload(c *websocket.Conn, f File) {
 		log.Println("file upload:", err)
 		return
 	}
+	if database.DoesFileExist(f, connections[c]) {
+		return
+	}
 	f.data = message
 	database.InsertFile(f, connections[c])
 	splitAmount := len(f.data) / len(connections)
