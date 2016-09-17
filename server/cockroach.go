@@ -157,7 +157,7 @@ func newDbFile(r *sql.Rows) dbFile {
 
 func (db *Database) dbFilesForClient(owner Client) []dbFile {
 	dbC := db.dbClientForClient(owner)
-	rows, err := db.Query("SELECT * FROM File WHERE ownerId=$2", dbC.id)
+	rows, err := db.Query("SELECT * FROM File WHERE ownerId=$1", dbC.id)
 	if err != nil {
 		log.Fatalln("Unable to get file for owner", owner.username, ":", err)
 	}

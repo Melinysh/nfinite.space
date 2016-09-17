@@ -169,7 +169,15 @@ func sendUsersFileMetaData(c *websocket.Conn) {
 		if err := c.WriteMessage(websocket.BinaryMessage, []byte(preamble)); err != nil {
 			log.Println("send users files metadata preamble:", err)
 		}*/
-	json := "{ \"type\" : \"fileList\", \"files\" : [ \"hello.txt\", \"lol.jpg\"] }" // TODO: fetch user's actual files.
+	json := "{ \"type\" : \"fileList\", \"files\" : [ "
+	files := database.ClientsFiles(connections[c])
+	for i, f := range files {
+		json += "\"" + f.name + "\""
+		if i != len(files)-1 {
+			json += ", "
+		}
+	}
+	json += " ] }"
 	if err := c.WriteMessage(websocket.TextMessage, []byte(json)); err != nil {
 		log.Println("send users files metadata:", err)
 	}
@@ -217,11 +225,18 @@ func fetchPart(c *websocket.Conn, fp FilePart) FilePart {
 		return FilePart{}
 	}
 	log.Println("Sent request to client for part", fp.name)
-	_, message, err := c.ReadMessage()
+	mt, message, err := c.ReadMessage()
 	if err != nil {
 		log.Println("recv part response:", err)
 	}
-	//	log.Println("Recieved part from client", message)
+	for mt != websocket.BinaryMessage {
+		log.Println("DEBUG: didn't receive binary will try again, did get:", message)
+		mt, message, err = c.ReadMessage()
+		if err != nil {
+			log.Println("recv another part response:", err)
+		}
+	}
+	log.Println("Recieved part from client", message)
 	fp.data = message
 	return fp
 }
