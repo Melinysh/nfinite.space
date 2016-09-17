@@ -58,28 +58,25 @@ function WebSocketPlus(server) {
 
     this.onMessage = evt => {
          //console.log(evt.data, evt);
-
-        if (state.expectingBlob) {
+        if (state.expectingFileList){
+          console.log("Got list of files")
+          const fileListProm = blob2buf(evt.data)
+          Promise.all([fileListProm]).then(vals => {
+            this.fileArray = vals[0]["files"]
+            loadTable(this.fileArray);
+            state.expectingFileList = false
+        })
+      }
+        else if (state.expectingBlob) {
             console.log("Got a Blob")
 
             state.blobProm = Promise.resolve(evt.data);
         } else {
-          if (state.expectingFileList){
-            console.log("Got list of files")
-            const fileListProm = blob2buf(evt.data)
-            Promise.all([fileListProm]).then(vals => {
-              this.fileArray = vals[0]["files"]
-              loadTable(this.fileArray);
-            })
-
-          }
-          else{
             console.log("Got some JSON")
 
             state.jsonProm = blob2buf(evt.data);
 
             state.expectingBlob = true;
-          }
         }
 
         Promise.all([
