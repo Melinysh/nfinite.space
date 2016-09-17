@@ -20,7 +20,7 @@ class AppContainer extends Component {
         this._ws.sendJSON({
           type: "registration",
           userMeta: {
-            name: "dickbutt",
+            name: "dickbutt2",
             pass: "poopbutt"
           }
         })
@@ -101,6 +101,7 @@ class AppContainer extends Component {
     console.log("PARTS " + this.PARTS + " Finding part " + fileName)
     if (this.PARTS[fileName] !== null){
       console.log("Do we have it? " + this.PARTS[fileName])
+      socket.sendJSON({type:"nop"})
       socket.sendBuffer(this.PARTS[fileName])
       this.safeKeepingJSON = null
     }
@@ -113,7 +114,7 @@ class AppContainer extends Component {
     this._ws.sendJSON({
         type: "request",
         "fileMeta":{
-          name:"profile5.jpg",
+          name:"profile15.jpg",
           dateModified: ""
         }
     })

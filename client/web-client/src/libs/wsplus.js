@@ -11,7 +11,7 @@ export default function WebSocketPlus(server) {
   }
   this.sendBuffer = data => {
     ws.send(data)
-    console.log("Sending Buffer")
+    console.log("Sending Buffer " + data)
 
   }
   ws.onopen = () => {
