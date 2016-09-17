@@ -12,32 +12,7 @@ function blob2buf(blob) {
         reader.readAsArrayBuffer(blob);
     })
 }
-function handleDownloadRequest (fileName){
-  console.log(fileName)
-}
 
-function loadTable(elements){
-  var table = document.getElementById("fileList");
-  for (var x = 0;x<elements.length;x++){
-    var row = table.insertRow(x+1)
-    var fileNameCell = row.insertCell(0)
-    fileNameCell.innerHTML = elements[x]
-    var downloadCell = row.insertCell(1)
-
-    var button = document.createElement('button')
-    button.setAttribute("associatedFileName", fileNameCell.innerHTML)
-    button.innerHTML = "Download"
-
-    button.onclick = function(){
-
-      handleDownloadRequest(this.getAttribute("associatedFileName"));
-    }
-
-
-    downloadCell.appendChild(button)
-  }
-
-}
 
 
 const FILES = {};
@@ -123,7 +98,7 @@ ws.onOpen = () => {
     ws.sendJSON({
         type: "registration",
         userMeta: {
-            name: "dickbutt",
+            name: "dickbutt2",
             pass: "poopbutt"
         }
     })
@@ -156,5 +131,32 @@ function handleFileSelect(evt) {
         reader.readAsArrayBuffer(f);
     }
 }
+function handleDownloadRequest (fileName){
+  ws.sendJSON({
+      type: "fileRequest",
+      name: fileName
+  })
+  console.log(fileName)
+}
 
+function loadTable(elements){
+  var table = document.getElementById("fileList");
+  for (var x = 0;x<elements.length;x++){
+    var row = table.insertRow(x+1)
+    var fileNameCell = row.insertCell(0)
+    fileNameCell.innerHTML = elements[x]
+    var downloadCell = row.insertCell(1)
+
+    var button = document.createElement('button')
+    button.setAttribute("associatedFileName", fileNameCell.innerHTML)
+    button.innerHTML = "Download"
+
+    button.onclick = function(){
+
+      handleDownloadRequest(this.getAttribute("associatedFileName"));
+    }
+    downloadCell.appendChild(button)
+  }
+
+}
 document.getElementById('files').addEventListener('change', handleFileSelect, false);
