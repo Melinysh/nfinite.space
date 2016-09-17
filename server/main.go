@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"flag"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
@@ -15,7 +16,7 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-// FileMetaData
+// FileMetaData object
 type FileMetaData struct {
 	name     string
 	modified time.Time
@@ -32,6 +33,12 @@ type FilePart struct {
 	File
 	parent File
 	index  int
+}
+
+//FilePartRequest object
+type FilePartRequest struct {
+	owners   []Client
+	filePart FilePart
 }
 
 func fileFromMetaData(metadata map[string]interface{}) File {
@@ -54,8 +61,8 @@ func clientFromMetaData(metadata map[string]interface{}) Client {
 	return Client{username, password}
 }
 
-// Maps client username to connection
-var connections = map[string]*websocket.Conn{}
+// Maps connection to client
+var connections = map[*websocket.Conn]Client{}
 var database = NewDatabase()
 var addr = flag.String("addr", "0.0.0.0:8080", "http service address")
 
@@ -106,10 +113,10 @@ func listen(w http.ResponseWriter, r *http.Request) {
 			} else if t == "registration" {
 				metadata := m["userMeta"].(map[string]interface{})
 				client := clientFromMetaData(metadata)
-				connections[client.username] = c
+				connections[c] = client
 				sendUsersFileMetaData(c)
 				database.AddClient(client)
-				defer delete(connections, client)
+				defer delete(connections, c)
 			} else {
 				log.Println("type: unknown json type:", t)
 			}
@@ -120,7 +127,11 @@ func listen(w http.ResponseWriter, r *http.Request) {
 }
 
 func sendUsersFileMetaData(c *websocket.Conn) {
-	json := "{ \"files\" : [ \"hello.txt\", \"lol.jpg\"] }" // TODO: fetch user's actual files.
+	/*	preamble := "{ \"type\" : \"fileList\" }"
+		if err := c.WriteMessage(websocket.BinaryMessage, []byte(preamble)); err != nil {
+			log.Println("send users files metadata preamble:", err)
+		}*/
+	json := "{ \"type\" : \"fileList\", \"files\" : [ \"hello.txt\", \"lol.jpg\"] }" // TODO: fetch user's actual files.
 	if err := c.WriteMessage(websocket.BinaryMessage, []byte(json)); err != nil {
 		log.Println("send users files metadata:", err)
 	}
@@ -141,10 +152,30 @@ func getFileUpload(c *websocket.Conn, f File) {
 		log.Println("write file:", err)
 		return
 	}
-	log.Println("DEBUG: wrote file to ./", f.name)
-	f.data = f.data[0 : len(f.data)/2]
-	time.Sleep(time.Second * 2)
-	sendPart(c, f)
+	database.InsertFile(f, connections[c])
+	splitAmount := len(f.data) / len(connections)
+	begin := 0
+	for con, cli := range connections {
+		fpData := f.data[begin:splitAmount]
+
+		fp := FilePart{}
+		fp.name = hash(fmt.Sprintf("%s%v", f.name, con))
+		fp.parent = f
+		fp.modified = f.modified
+		fp.index = begin / (len(f.data) / len(connections))
+		fp.data = fpData
+
+		log.Println("DEBUG: created fp: ", fp.name, fp.index, fp.parent.name)
+
+		database.AddFilePart(fp, connections[c], cli)
+
+		begin += splitAmount
+		splitAmount *= 2
+	}
+	//log.Println("DEBUG: wrote file to ./", f.name)
+	//	f.data = f.data[0 : len(f.data)/2]
+	//	time.Sleep(time.Second * 2)
+	//	sendPart(c, f)
 }
 
 func requestPart(c *websocket.Conn, fp FilePart) {
