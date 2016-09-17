@@ -7,7 +7,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"strconv"
@@ -66,6 +65,15 @@ var connections = map[*websocket.Conn]Client{}
 var database = NewDatabase()
 var addr = flag.String("addr", "0.0.0.0:8080", "http service address")
 
+func connForClient(c Client) *websocket.Conn {
+	for con, cli := range connections {
+		if cli.username == c.username {
+			return con
+		}
+	}
+	return nil
+}
+
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
@@ -117,6 +125,25 @@ func listen(w http.ResponseWriter, r *http.Request) {
 				sendUsersFileMetaData(c)
 				database.AddClient(client)
 				defer delete(connections, c)
+			} else if t == "request" {
+				metadata := m["fileMeta"].(map[string]interface{})
+				f := fileFromMetaData(metadata)
+				f = database.GetFile(f.name, connections[c])
+				reqs := database.FilePartRequestsForFile(f, connections[c])
+				log.Println("Number of reqs:", len(reqs))
+				for _, req := range reqs {
+					var reqCon *websocket.Conn = nil
+					i := 0
+					for reqCon == nil {
+						reqCon = connForClient(req.owners[i])
+						i += 1
+					}
+
+					pt := fetchPart(reqCon, req.filePart)
+					f.data = append(f.data, pt.data...)
+				}
+				log.Println("About to send file ", f.name)
+				sendFileResponse(c, f)
 			} else {
 				log.Println("type: unknown json type:", t)
 			}
@@ -126,13 +153,24 @@ func listen(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func sendFileResponse(c *websocket.Conn, f File) {
+	json := "{\"type\" : \"response\", \"fileMeta\" : { \"name\" : \"" + f.name + "\" } }"
+	if err := c.WriteMessage(websocket.TextMessage, []byte(json)); err != nil {
+		log.Println("send file response json: ", err)
+		return
+	}
+	if err := c.WriteMessage(websocket.BinaryMessage, f.data); err != nil {
+		log.Println("send user requested file:", err)
+	}
+}
+
 func sendUsersFileMetaData(c *websocket.Conn) {
 	/*	preamble := "{ \"type\" : \"fileList\" }"
 		if err := c.WriteMessage(websocket.BinaryMessage, []byte(preamble)); err != nil {
 			log.Println("send users files metadata preamble:", err)
 		}*/
 	json := "{ \"type\" : \"fileList\", \"files\" : [ \"hello.txt\", \"lol.jpg\"] }" // TODO: fetch user's actual files.
-	if err := c.WriteMessage(websocket.BinaryMessage, []byte(json)); err != nil {
+	if err := c.WriteMessage(websocket.TextMessage, []byte(json)); err != nil {
 		log.Println("send users files metadata:", err)
 	}
 }
@@ -147,11 +185,6 @@ func getFileUpload(c *websocket.Conn, f File) {
 		return
 	}
 	f.data = message
-	err = ioutil.WriteFile(f.name, f.data, 0644)
-	if err != nil {
-		log.Println("write file:", err)
-		return
-	}
 	database.InsertFile(f, connections[c])
 	splitAmount := len(f.data) / len(connections)
 	begin := 0
@@ -168,28 +201,32 @@ func getFileUpload(c *websocket.Conn, f File) {
 		log.Println("DEBUG: created fp: ", fp.name, fp.index, fp.parent.name)
 
 		database.AddFilePart(fp, connections[c], cli)
-
+		sendPart(con, fp)
 		begin += splitAmount
 		splitAmount *= 2
 	}
-	//log.Println("DEBUG: wrote file to ./", f.name)
-	//	f.data = f.data[0 : len(f.data)/2]
-	//	time.Sleep(time.Second * 2)
-	//	sendPart(c, f)
 }
 
-func requestPart(c *websocket.Conn, fp FilePart) {
+func fetchPart(c *websocket.Conn, fp FilePart) FilePart {
 	json := "{\"type\" : \"request\", \"fileMeta\" : { \"name\" : \"" + fp.name + "\" } }"
-	if err := c.WriteMessage(websocket.BinaryMessage, []byte(json)); err != nil {
+	if err := c.WriteMessage(websocket.TextMessage, []byte(json)); err != nil {
 		log.Println("send request json: ", err)
-		return
+		return FilePart{}
 	}
+	log.Println("Sent request to client for part", fp.name)
+	_, message, err := c.ReadMessage()
+	if err != nil {
+		log.Println("recv part response:", err)
+	}
+	//	log.Println("Recieved part from client", message)
+	fp.data = message
+	return fp
 }
 
-func sendPart(c *websocket.Conn, f File) {
-	json := "{\"type\" : \"part\", \"fileMeta\" : { \"name\" : \"" + hash(f.name) + "\", \"dateModified\" : \"" + strconv.FormatInt(f.modified.Unix(), 10) + "\" } }"
+func sendPart(c *websocket.Conn, f FilePart) {
+	json := "{\"type\" : \"part\", \"fileMeta\" : { \"name\" : \"" + f.name + "\", \"dateModified\" : \"" + strconv.FormatInt(f.modified.Unix(), 10) + "\" } }"
 	log.Println("Sending json: ", json)
-	if err := c.WriteMessage(websocket.BinaryMessage, []byte(json)); err != nil {
+	if err := c.WriteMessage(websocket.TextMessage, []byte(json)); err != nil {
 		log.Println("send part json: ", err)
 		return
 	}
@@ -202,7 +239,7 @@ func sendPart(c *websocket.Conn, f File) {
 func sendFile(c *websocket.Conn, f File) {
 	json := "{\"type\" : \"file\", \"fileMeta\" : { \"name\" : \"" + f.name + "\", \"dateModified\" : \"" + strconv.FormatInt(f.modified.Unix(), 10) + "\" } }"
 	log.Println("Sending json: ", json)
-	if err := c.WriteMessage(websocket.BinaryMessage, []byte(json)); err != nil {
+	if err := c.WriteMessage(websocket.TextMessage, []byte(json)); err != nil {
 		log.Println("send file json: ", err)
 		return
 	}
@@ -231,5 +268,6 @@ func main() {
 	flag.Parse()
 	log.SetFlags(0)
 	http.HandleFunc("/websockets", listen)
+	log.Println("Now listening...")
 	log.Fatal(http.ListenAndServe(*addr, nil))
 }

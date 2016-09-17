@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"log"
+	"time"
 
 	_ "github.com/lib/pq"
 )
@@ -84,7 +85,7 @@ func newDbFilePart(r *sql.Rows) dbFilePart {
 
 func (db *Database) dbFilePartsForDbFile(f dbFile) []dbFilePart {
 	var parts []dbFilePart
-	rows, err := db.Query("SELECT * FROM FilePart WHERE parentId=$1", f.id)
+	rows, err := db.Query("SELECT * FROM FilePart WHERE parentId=$1 ORDER BY fileIndex ASC", f.id)
 	if err != nil {
 		log.Fatalln("Unable to get file part for file id", f.id, ":", err)
 	}
@@ -116,19 +117,25 @@ func (db *Database) savePartLookup(dbFp dbFilePart, dbC dbClient) {
 }
 
 func (db *Database) dbClientsForDbFilePart(dbFp dbFilePart) []dbClient {
-	rows, err := db.Query("SELECT ownerId FROM FileLookup WHERE partId=$1", dbFp.id)
+	rows, err := db.Query("SELECT ownerId FROM PartLookup WHERE partId=$1", dbFp.id)
 	if err != nil {
 		log.Fatalln("Unable to get file for name", dbFp.name, ":", err)
 	}
-	defer rows.Close()
+	//	defer rows.Close()
 	var dbClients []dbClient
+	ids := []int{}
 	for rows.Next() {
 		var id int
 		if err := rows.Scan(&id); err != nil {
 			log.Println("client from file part lookup:", err)
 		}
+		ids = append(ids, id)
+	}
+	rows.Close()
+	for _, id := range ids {
 		dbClients = append(dbClients, db.dbClientForId(id))
 	}
+
 	return dbClients
 }
 
@@ -146,6 +153,21 @@ func newDbFile(r *sql.Rows) dbFile {
 		log.Println("new db file:", err)
 	}
 	return dbFile{id, modified, name, ownerId}
+}
+
+func (db *Database) dbFilesForClient(owner Client) []dbFile {
+	dbC := db.dbClientForClient(owner)
+	rows, err := db.Query("SELECT * FROM File WHERE ownerId=$2", dbC.id)
+	if err != nil {
+		log.Fatalln("Unable to get file for owner", owner.username, ":", err)
+	}
+	defer rows.Close()
+	var dbFiles []dbFile
+	for rows.Next() {
+		dbFiles = append(dbFiles, newDbFile(rows))
+	}
+	return dbFiles
+
 }
 
 func (db *Database) dbFileForClientFile(f File, c Client) dbFile {
@@ -173,7 +195,7 @@ type Database struct {
 }
 
 func NewDatabase() Database {
-	db, err := sql.Open("postgres", "postgresql://root@localhost:26257?sslmode=disable")
+	db, err := sql.Open("postgres", "postgresql://root@localhost:26257?sslcert=%2Fhome%2Fubuntu%2Fnode1.cert&sslkey=%2Fhome%2Fubuntu%2Fnode1.key&sslmode=verify-full&sslrootcert=%2Fhome%2Fubuntu%2Fca.cert")
 	if err != nil {
 		log.Fatalln("database connection:", err)
 	}
@@ -207,6 +229,25 @@ func (db *Database) AddClient(c Client) {
 	if _, err := db.Exec("INSERT INTO Client (username, password) VALUES ($1, $2) ON CONFLICT (username) DO NOTHING", c.username, c.password); err != nil {
 		log.Fatalln("insert client:", err)
 	}
+}
+func (db *Database) ClientsFiles(c Client) []File {
+	dbFs := db.dbFilesForClient(c)
+	var files []File
+	for _, dbF := range dbFs {
+		f := File{}
+		f.name = dbF.name
+		f.modified = time.Unix(int64(dbF.modified), 0)
+		files = append(files, f)
+	}
+	return files
+}
+
+func (db *Database) GetFile(name string, c Client) File {
+	f := File{}
+	f.name = name
+	dbF := db.dbFileForClientFile(f, c)
+	f.modified = time.Unix(int64(dbF.modified), 0)
+	return f
 }
 
 func (db *Database) InsertFile(f File, c Client) {
