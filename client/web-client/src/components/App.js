@@ -1,9 +1,17 @@
 import React from 'react';
 
-const App = props => {
+const App=props => {
   return (
     <div className="wrapper">
-      <div className="test">{props.testing}</div>
+      <input onChange={props.handlers.handleFileUpload} type="file" id="files" name="files[]" multiple />
+      <table id="fileList">
+        <tbody>
+    <tr>
+      <th>File Name</th>
+      <th>Download</th>
+    </tr>
+      </tbody>
+  </table>
     </div>
   )
 }
