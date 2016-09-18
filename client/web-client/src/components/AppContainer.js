@@ -15,9 +15,17 @@ class AppContainer extends Component {
   safeKeepingJSON = {}
 
     componentDidMount = () => {
-      console.log("HELLO WORLD")
-      this._ws = new WebSocketPlus("ws://54.197.38.216:8080/websockets");
 
+      this._ws = new WebSocketPlus("ws://54.197.38.216:8080/websockets");
+      this._ws.onOpen = () => {
+        this._ws.sendJSON({
+          type: "registration",
+          userMeta: {
+            name: window.username,
+            pass: window.password
+          }
+        })
+      }
 
       this._ws.onMessage = evt => {
         const data = evt.data;

@@ -16,7 +16,7 @@ ReactDOM.render(
   </div>
     <Router history={hashHistory}>
       <Route path="/" component={Login}/>
-      <Route path="/dashboard" component={AppContainer}/>
+      <Route path="/dashboard" username = "null" password = "null" component={AppContainer}/>
     </Router>
     </div>,
   document.getElementById('root')

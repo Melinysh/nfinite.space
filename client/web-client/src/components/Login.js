@@ -10,18 +10,12 @@ class Login extends Component {
   }
   handleLogin = () =>{
 
-    this._ws = new WebSocketPlus("ws://54.197.38.216:8080/websockets");
-    this._ws.onOpen = () => {
-      this._ws.sendJSON({
-        type: "registration",
-        userMeta: {
-          name: this.state.username,
-          pass: this.state.password
-        }
-      })
 
-      window.location.href = '/#/dashboard'
-    }
+
+      window.username = this.state.username;
+      window.password = this.state.password;
+      this.props.history.push('/dashboard');
+    
   }
   handleUserChange = (e) =>{
     this.setState({username:e.target.value});
@@ -42,7 +36,7 @@ class Login extends Component {
       <h3 className = "formTitle"><b>Password</b></h3>
       <input onChange={this.handlePassChange}  type="password" placeholder="Enter Password" name="psw" required />
 
-      <button onClick={this.handleLogin} type="submit">Login</button>
+      <button onClick={this.handleLogin} type="submit" className="button1">Login</button>
 
     </div>
       </div>
