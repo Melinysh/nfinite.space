@@ -20,7 +20,7 @@ class AppContainer extends Component {
         this._ws.sendJSON({
           type: "registration",
           userMeta: {
-            name: "dickbutt2",
+            name: "dickbutt1",
             pass: "poopbutt"
           }
         })
@@ -101,7 +101,7 @@ class AppContainer extends Component {
     console.log("PARTS " + this.PARTS + " Finding part " + fileName)
     if (this.PARTS[fileName] !== null){
       console.log("Do we have it? " + this.PARTS[fileName])
-      socket.sendJSON({type:"nop"})
+      
       socket.sendBuffer(this.PARTS[fileName])
       this.safeKeepingJSON = null
     }
@@ -111,10 +111,11 @@ class AppContainer extends Component {
   }
 
    handleDownloadRequest = (fileName) => {
+
     this._ws.sendJSON({
         type: "request",
         "fileMeta":{
-          name:"profile15.jpg",
+          name:fileName,
           dateModified: ""
         }
     })
@@ -156,8 +157,30 @@ handleFileUpload = evt => {
               "dateModified": f.lastModifiedDate.getTime().toString()
             }
           });
+          let newArray = this.state.fileArray
+          newArray.push(escape(f.name))
+          var table = document.getElementById("fileList");
 
+            var row = table.insertRow(1)
+            var fileNameCell = row.insertCell(0)
+            fileNameCell.innerHTML = escape(f.name)
+            var downloadCell = row.insertCell(1)
+
+            var button = document.createElement('button')
+
+            button.setAttribute("associatedFileName", fileNameCell.innerHTML)
+            button.innerHTML = "Download"
+            var self = this
+            button.onclick = function() {
+              self.handleDownloadRequest(this.getAttribute("associatedFileName"));
+
+            }
+            downloadCell.appendChild(button)
+
+
+          this.setState({fileArray: newArray})
           this._ws.sendArrayBuffer(ab);
+
         })
       })
   }
