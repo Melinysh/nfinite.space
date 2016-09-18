@@ -108,9 +108,10 @@ func listen(w http.ResponseWriter, r *http.Request) {
 			log.Println("read:", err)
 			break
 		}
-		log.Printf("recv: %s", message)
 		log.Println("Message type is:", mt)
 		if mt == websocket.TextMessage {
+			log.Printf("recv: %s", message)
+
 			var m map[string]interface{}
 			if err = json.Unmarshal(message, &m); err != nil {
 				log.Println("json unmarshal:", err)
@@ -124,6 +125,7 @@ func listen(w http.ResponseWriter, r *http.Request) {
 			} else if t == "registration" {
 				metadata := m["userMeta"].(map[string]interface{})
 				client := clientFromMetaData(metadata)
+				log.Println("Adding client", client)
 				connections[c] = client
 				database.AddClient(client)
 				sendUsersFileMetaData(c)
@@ -206,32 +208,38 @@ func getFileUpload(c *websocket.Conn, f File) {
 		log.Println("file upload:", err)
 		return
 	}
+	log.Println("Client is", connections[c])
 	if database.DoesFileExist(f, connections[c]) {
 		return
 	}
 	f.data = message
 	database.InsertFile(f, connections[c])
-	splitAmount := len(f.data) / len(connections)
+	splitAmount := len(f.data) / (len(connections) - 1)
+	sp := splitAmount
 	begin := 0
+	i := 0
+	log.Println("Length of data is", len(f.data))
 	for con, cli := range connections {
 		if con == c {
 			continue
 		}
+		log.Println("Begin: ", begin, " splitAmt: ", splitAmount)
 		fpData := f.data[begin:splitAmount]
 
 		fp := FilePart{}
 		fp.name = hash(fmt.Sprintf("%s%v", f.name, con))
 		fp.parent = f
 		fp.modified = f.modified
-		fp.index = begin / (len(f.data) / len(connections))
+		fp.index = i
 		fp.data = fpData
 
 		log.Println("DEBUG: created fp: ", fp.name, fp.index, fp.parent.name)
 
 		database.AddFilePart(fp, connections[c], cli)
 		sendPart(con, fp)
-		begin += splitAmount
-		splitAmount *= 2
+		begin = splitAmount
+		splitAmount += sp
+		i++
 	}
 }
 
