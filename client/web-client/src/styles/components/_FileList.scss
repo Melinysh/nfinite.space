@@ -1,0 +1,49 @@
+.selectFile {
+    margin: auto;
+    display: block;
+    border: 1px solid lightgrey;
+    padding: 10px;
+    border-radius: 2px;
+}
+
+.file {
+    border-bottom: 1px solid lightgray;
+    padding: 10px 10px;
+}
+
+.file__name {
+    width: 70%;
+    display: inline-block;
+}
+
+.file:hover .file__name {
+	text-decoration: underline;
+}
+
+.file__download {
+    display: inline-block;
+    width: 30%;
+    text-align: right;
+}
+
+.fileListWrapper {
+    width: 80%;
+    margin: auto;
+}
+
+.file.fileTitle {
+    border-bottom: 2px solid lightgrey;
+    font-weight: 600;
+}
+
+.file:hover {
+    background-color: whitesmoke;
+    cursor: pointer;
+}
+
+.file.fileTitle:hover {
+    background-color: white;
+}
+.file.fileTitle:hover .file__name {
+    text-decoration: none;
+}

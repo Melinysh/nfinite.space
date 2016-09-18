@@ -2,3 +2,35 @@
     font-family: $typ-default;
     box-sizing: border-box;
 }
+
+.titleWrapper {
+    background-color: #010907;
+    background: url(http://cdni.wired.co.uk/1240x826/s_v/space_11.jpg);
+    height: 200px;
+    background-size: cover;
+}
+
+.title {
+    text-align: center;
+    color: #FFFFFF;
+    font-family: Raleway;
+}
+
+.tableHeader {
+    text-align: center;
+}
+
+.navElement {
+    display: inline-block;
+    color: white;
+    padding: 8px 5px;
+    margin-left: 20px;
+    margin: 10px;
+    border: 1px solid white;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: .25s;
+    &:hover {
+    	background-color: rgba(255,255,255,0.25);
+    }
+}

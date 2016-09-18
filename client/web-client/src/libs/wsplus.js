@@ -1,19 +1,19 @@
-// import * as convert from "./arrayBufHelpers";
 export default function WebSocketPlus(server) {
   const ws = new WebSocket(server);
+
   this.onOpen = () => {};
   this.onClose = () => {};
   this.onMessage = () => {};
-  this.sendArrayBuffer = ab => ws.send(ab);
+
   this.sendJSON = json => {
     ws.send(JSON.stringify(json));
-    console.log("Sending", JSON.stringify(json));
+    console.log("Sending JSON string:", JSON.stringify(json));
   }
-  this.sendBuffer = data => {
-    ws.send(data)
-    console.log("Sending Buffer " + data)
+  this.sendBuffer = ab => {
+    ws.send(ab)
+    console.log("Sending Buffer:", ab)
+  }
 
-  }
   ws.onopen = () => {
     console.log("Connection Established");
     this.onOpen();

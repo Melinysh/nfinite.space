@@ -4,167 +4,148 @@ import App from './App';
 
 import WebSocketPlus from '../libs/wsplus';
 
-import * as convert from '../libs/arrayBuffHelpers';
+// HELPERS
+
+function file2ab(f) {
+  return new Promise((res, rej) => {
+    const reader = new FileReader();
+    reader.onload = (f => {
+      return e => {
+        const fileArrayBuffer = e.target.result;
+
+        res(fileArrayBuffer);
+      };
+    })(f);
+
+    reader.readAsArrayBuffer(f);
+  })
+}
+
+function saveFileFromArrayBuffer(fullName, buf) {
+  const blob = new Blob([buf]);
+
+  const link = document.createElement('a');
+  link.href = window.URL.createObjectURL(blob);
+  link.download = fullName;
+
+  link.click();
+}
+
+// MAIN APP
+
+const PART_STORE = {};
 
 class AppContainer extends Component {
   state = {
     fileArray: []
   }
 
-  PARTS = {};
-  safeKeepingJSON = {}
+  _blobMetaJSON = {}
 
-    componentDidMount = () => {
+  componentDidMount = () => {
+    this._ws = new WebSocketPlus("ws://54.197.38.216:8080/websockets");
+    this._ws.onOpen = () => {
+      this._ws.sendJSON({
+        type: "registration",
+        userMeta: {
+          name: window.username ? window.username : "DEFAULT",
+          pass: window.password ? window.password : "DEFAULT"
+        }
+      })
+    }
 
-      this._ws = new WebSocketPlus("ws://54.197.38.216:8080/websockets");
-      this._ws.onOpen = () => {
-        this._ws.sendJSON({
-          type: "registration",
-          userMeta: {
-            name: window.username,
-            pass: window.password
-          }
-        })
-      }
+    this._ws.onMessage = evt => {
+      const data = evt.data;
 
-      this._ws.onMessage = evt => {
-        const data = evt.data;
+      console.log("got msg event:", evt);
 
-        console.log(evt);
+      if (typeof data === "string") {
+        const json = JSON.parse(data);
+        console.log("Got JSON!", JSON.parse(data));
 
-        if (typeof data === "string") {
-          const json = JSON.parse(data);
-          console.log("Got JSON!", JSON.parse(data));
+        switch (json.type) {
+          /* User comms */
+          case "fileList":
+            console.log("Got list of files",  json["files"].map(x => x.fileMeta))
 
-          if (json.type === "fileList"){
-            console.log("Got list of files")
-            const fileList = JSON.parse(evt.data)
-              this.loadTable(fileList["files"]);
-              this.setState({fileArray:fileList["files"]})
-          }
-
-          if (json.type === "part") {
-            console.log("PART RECIEVED" + json)
-            this.safeKeepingJSON = json
-          }
-
-          if (json.type === "request"){
-            console.log("REQUEST RECIEVED")
-            this.handlePartRequest(this._ws,json["fileMeta"]["name"])
-          }
-
-          if (json.type == "response"){
-            console.log("RESPONSE RECEIVED");
-            this.safeKeepingJSON = json
-
-          }
-
-        } else if (data.constructor.name === "Blob") {
-          console.log("Got Data Blob!", data);
-          if (this.safeKeepingJSON.type === "response" ){
-            //this means i got a file!
-            convert.file2ab(data).then(ab => {
-                console.log("Received file: " + ab)
-
-                this.saveByteArray(this.safeKeepingJSON["fileMeta"]["name"],ab)
-                this.safeKeepingJSON = null
+            this.setState({
+              fileArray: json["files"].map(x => x.fileMeta)
             })
 
-          }
-          else if(this.safeKeepingJSON.type === "part"){
-            convert.file2ab(data).then(ab => {
-                console.log("AB: " +ab)
-                this.PARTS[this.safeKeepingJSON["fileMeta"]["name"]] = ab;
+            break;
+          case "response":
+            console.log("Got File meta, next message must be the file blob");
 
-                console.log("Stored blob in PARTS");
-                console.log(this.PARTS);
-            })
+            this._blobMetaJSON = json
+            break;
 
-          }
+            /* User-as-storage comms */
+          case "part":
+            console.log("Got Part meta, next message must be a part blob")
+
+            this._blobMetaJSON = json
+            break;
+          case "request":
+            console.log("Got part request")
+
+            this.$handlePartRequest(json["fileMeta"]["name"])
+            break;
 
         }
+      } else if (data.constructor.name === "Blob") {
+        console.log("Got Data Blob!", data);
 
+        file2ab(data)
+          .then(ab => {
+            if (this._blobMetaJSON.type === "response") {
+              console.log("Received file arraybuffer: ", ab);
+
+              saveFileFromArrayBuffer(this._blobMetaJSON["fileMeta"]["name"], ab);
+
+            } else if (this._blobMetaJSON.type === "part") {
+              console.log("Storing part in PARTS");
+
+              PART_STORE[this._blobMetaJSON["fileMeta"]["name"]] = ab;
+
+              console.log(PART_STORE);
+            }
+          })
       }
-    }
 
-   saveByteArray = (fullName, byte) => {
-      var blob = new Blob([byte]);
-      var link = document.createElement('a');
-      link.href = window.URL.createObjectURL(blob);
-      var timeNow = new Date();
-      var month = timeNow.getMonth() + 1;
-      var fileName = fullName;
-      link.download = fileName;
-      link.click();
+    }
   }
-  handlePartRequest = (socket,fileName) => {
 
-    console.log("PARTS " + this.PARTS + " Finding part " + fileName)
-    if (this.PARTS[fileName] !== null){
-      console.log("Do we have it? " + this.PARTS[fileName])
+  $handlePartRequest = fileName => {
+    console.log("PARTS " + PART_STORE + " Finding part " + fileName)
 
-      socket.sendBuffer(this.PARTS[fileName])
-      this.safeKeepingJSON = null
-    }
-    else{
+    if (PART_STORE[fileName] !== null) {
+      console.log("Do we have it? " + PART_STORE[fileName])
+
+      this._ws.sendBuffer(PART_STORE[fileName])
+    } else {
       console.log("No such part exists")
     }
   }
 
-   handleDownloadRequest = (fileName) => {
+  handleDownloadRequest = (fileName) => {
+    console.log("Requested:", fileName);
 
     this._ws.sendJSON({
-        type: "request",
-        "fileMeta":{
-          name:fileName,
-          dateModified: ""
-        }
+      type: "request",
+      "fileMeta": {
+        name: fileName,
+        dateModified: ""
+      }
     })
-    console.log(fileName)
   }
- timeConverter = (unix_timestamp) =>{
-   var date = new Date(unix_timestamp*1000);
 
-   // Hours part from the timestamp
-   var hours = date.getHours();
-   // Minutes part from the timestamp
-   var minutes = "0" + date.getMinutes();
-   // Seconds part from the timestamp
-   var seconds = "0" + date.getSeconds();
-
-   // Will display time in 10:30:23 format
-   return (date);
-}
-  loadTable = (elements) => {
-
-      var table = document.getElementById("fileList");
-      for (var x = 0;x<elements.length;x++){
-        var row = table.insertRow(x+1)
-        var fileNameCell = row.insertCell(0)
-        fileNameCell.innerHTML = elements[x]["fileMeta"]["name"]
-        var lastModCell = row.insertCell(1)
-
-        lastModCell.innerHTML = this.timeConverter(elements[x]["fileMeta"]["lastModified"])
-        var downloadCell = row.insertCell(2)
-
-        var button = document.createElement('button')
-
-        button.setAttribute("associatedFileName", fileNameCell.innerHTML)
-        button.innerHTML = "Download"
-        var self = this
-        button.onclick = function() {
-          self.handleDownloadRequest(this.getAttribute("associatedFileName"));
-        }
-        downloadCell.appendChild(button)
-  }
-}
-handleFileUpload = evt => {
+  handleFileUpload = evt => {
     const files = evt.target.files; // FileList object
 
     Object.keys(files)
       .map(key => files[key])
       .forEach(f => {
-        convert.file2ab(f).then(ab => {
+        file2ab(f).then(ab => {
           console.log(escape(f.name));
 
           this._ws.sendJSON({
@@ -174,45 +155,31 @@ handleFileUpload = evt => {
               "dateModified": f.lastModifiedDate.getTime().toString()
             }
           });
-          let newArray = this.state.fileArray
-          newArray.push(escape(f.name))
-          var table = document.getElementById("fileList");
+          this._ws.sendBuffer(ab);
 
-            var row = table.insertRow(-1)
-            var fileNameCell = row.insertCell(0)
-            fileNameCell.innerHTML = escape(f.name)
-            var lastModCell = row.insertCell(1)
+          // update file-list
 
-            lastModCell.innerHTML = this.timeConverter(f.lastModifiedDate.getTime().toString())
-            var downloadCell = row.insertCell(2)
+          const newFileArray = this.state.fileArray;
+          newFileArray.push({
+            name:escape(f.name),
+            lastModified: (f.lastModifiedDate.getTime() / 1000).toString()
+          })
 
-            var button = document.createElement('button')
-
-            button.setAttribute("associatedFileName", fileNameCell.innerHTML)
-            button.innerHTML = "Download"
-            var self = this
-            button.onclick = function() {
-              self.handleDownloadRequest(this.getAttribute("associatedFileName"));
-
-            }
-            downloadCell.appendChild(button)
-
-
-          this.setState({fileArray: newArray})
-          this._ws.sendArrayBuffer(ab);
-
+          this.setState({
+            fileArray: newFileArray
+          })
         })
       })
   }
 
 
-_handlers = {
-   handleFileUpload: this.handleFileUpload.bind(this),
+  _handlers = {
+    handleFileUpload: this.handleFileUpload.bind(this),
+    handleDownloadRequest: this.handleDownloadRequest.bind(this),
   }
 
   /* beautify preserve:start */
   render() {
-
     return (
       <App {...this.state}
            handlers={this._handlers}/>
