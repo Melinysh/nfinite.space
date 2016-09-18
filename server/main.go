@@ -10,6 +10,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -42,7 +43,7 @@ type FilePartRequest struct {
 
 func fileFromMetaData(metadata map[string]interface{}) File {
 	seconds, _ := strconv.ParseInt(metadata["dateModified"].(string), 10, 64)
-	dateMod := time.Unix(seconds, 0)
+	dateMod := time.Unix(seconds/1000, 0)
 	name := metadata["name"].(string)
 	return File{FileMetaData{name, dateMod}, []byte("")}
 }
@@ -60,8 +61,10 @@ func clientFromMetaData(metadata map[string]interface{}) Client {
 	return Client{username, password}
 }
 
-// Maps connection to client
+// Maps connection to key objects
 var connections = map[*websocket.Conn]Client{}
+var buffers = map[*websocket.Conn][]byte{}
+var waitGroups = map[*websocket.Conn]*sync.WaitGroup{}
 var database = NewDatabase()
 var addr = flag.String("addr", "0.0.0.0:8080", "http service address")
 
@@ -122,8 +125,9 @@ func listen(w http.ResponseWriter, r *http.Request) {
 				metadata := m["userMeta"].(map[string]interface{})
 				client := clientFromMetaData(metadata)
 				connections[c] = client
-				sendUsersFileMetaData(c)
 				database.AddClient(client)
+				sendUsersFileMetaData(c)
+
 				defer delete(connections, c)
 			} else if t == "request" {
 				metadata := m["fileMeta"].(map[string]interface{})
@@ -135,6 +139,11 @@ func listen(w http.ResponseWriter, r *http.Request) {
 					var reqCon *websocket.Conn = nil
 					i := 0
 					for reqCon == nil {
+						if i >= len(req.owners) {
+							// out of bounds
+							log.Panicln("No available peers to fetch part from.")
+							return
+						}
 						reqCon = connForClient(req.owners[i])
 						i += 1
 					}
@@ -148,7 +157,11 @@ func listen(w http.ResponseWriter, r *http.Request) {
 				log.Println("type: unknown json type:", t)
 			}
 		} else {
-			log.Println("Not text message")
+			log.Println("Not text message, save to byte storage")
+			buffers[c] = message
+			if wt, ok := waitGroups[c]; ok {
+				wt.Done()
+			}
 		}
 	}
 }
@@ -172,7 +185,8 @@ func sendUsersFileMetaData(c *websocket.Conn) {
 	json := "{ \"type\" : \"fileList\", \"files\" : [ "
 	files := database.ClientsFiles(connections[c])
 	for i, f := range files {
-		json += "\"" + f.name + "\""
+		json += " { \"fileMeta\" : { "
+		json += "\"name\" : \"" + f.name + "\", \"lastModified\" : \"" + strconv.FormatInt(f.modified.Unix(), 10) + "\" } }"
 		if i != len(files)-1 {
 			json += ", "
 		}
@@ -200,6 +214,9 @@ func getFileUpload(c *websocket.Conn, f File) {
 	splitAmount := len(f.data) / len(connections)
 	begin := 0
 	for con, cli := range connections {
+		if con == c {
+			continue
+		}
 		fpData := f.data[begin:splitAmount]
 
 		fp := FilePart{}
@@ -225,18 +242,13 @@ func fetchPart(c *websocket.Conn, fp FilePart) FilePart {
 		return FilePart{}
 	}
 	log.Println("Sent request to client for part", fp.name)
-	mt, message, err := c.ReadMessage()
-	if err != nil {
-		log.Println("recv part response:", err)
-	}
-	for mt != websocket.BinaryMessage {
-		log.Println("DEBUG: didn't receive binary will try again, did get:", message)
-		mt, message, err = c.ReadMessage()
-		if err != nil {
-			log.Println("recv another part response:", err)
-		}
-	}
-	log.Println("Recieved part from client", message)
+	wt := sync.WaitGroup{}
+	wt.Add(1)
+	waitGroups[c] = &wt
+	wt.Wait()
+	log.Println("Got response from client for part", fp.name)
+	delete(waitGroups, c)
+	message := buffers[c]
 	fp.data = message
 	return fp
 }
