@@ -8,10 +8,109 @@ table {
 
 td, th {
     border: 1px solid #dddddd;
-    text-align: left;
+    text-align: center;
     padding: 8px;
 }
 
 tr:nth-child(even) {
     background-color: #dddddd;
+}
+.tableHeader{
+  text-align: center;
+}
+.title{
+  text-align: center;
+  vertical-align: middle;
+  position: absolute;;
+  top:6%;
+  left:44%;
+  color: #FFFFFF
+}
+.titleWrapper{
+  background-color: #010907;
+  height: 200px
+
+}
+.navElement{
+  display:inline-block;
+}
+.navElement{
+  padding-left: 20px;
+  color:white;
+}
+.loginLogout{
+  float:right;
+  padding-right: 20px;
+  color:white;
+}
+.selectFile{
+  position: relative;;
+  left:44%;
+
+}
+form {
+    border: 3px solid #f1f1f1;
+}
+
+input[type=text], input[type=password] {
+    width: 50%;
+    position: relative;
+    left:25%;
+    padding: 12px 20px;
+    margin: 8px 0;
+    display: block;
+    border: 1px solid #ccc;
+    box-sizing: border-box;
+}
+
+button {
+    background-color: #4CAF50;
+    color: white;
+    padding: 14px 20px;
+    margin: 8px 0;
+    border: none;
+    cursor: pointer;
+    position: relative;
+    left:30%;
+    width: 40%;
+}
+
+.cancelbtn {
+    width: auto;
+    padding: 10px 18px;
+    background-color: #f44336;
+}
+
+.imgcontainer {
+    text-align: center;
+    margin: 24px 0 12px 0;
+}
+
+img.avatar {
+    width: 40%;
+    border-radius: 50%;
+}
+.formTitle{
+  position:relative;
+  left:25%;
+
+}
+.container {
+    padding: 16px;
+}
+
+span.psw {
+    float: right;
+    padding-top: 16px;
+}
+
+/* Change styles for span and cancel button on extra small screens */
+@media screen and (max-width: 300px) {
+    span.psw {
+       display: block;
+       float: none;
+    }
+    .cancelbtn {
+       width: 60%;
+    }
 }

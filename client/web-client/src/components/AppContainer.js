@@ -15,16 +15,9 @@ class AppContainer extends Component {
   safeKeepingJSON = {}
 
     componentDidMount = () => {
+      console.log("HELLO WORLD")
       this._ws = new WebSocketPlus("ws://54.197.38.216:8080/websockets");
-      this._ws.onOpen = () => {
-        this._ws.sendJSON({
-          type: "registration",
-          userMeta: {
-            name: "dickbutt1",
-            pass: "poopbutt"
-          }
-        })
-      }
+
 
       this._ws.onMessage = evt => {
         const data = evt.data;
@@ -101,7 +94,7 @@ class AppContainer extends Component {
     console.log("PARTS " + this.PARTS + " Finding part " + fileName)
     if (this.PARTS[fileName] !== null){
       console.log("Do we have it? " + this.PARTS[fileName])
-      
+
       socket.sendBuffer(this.PARTS[fileName])
       this.safeKeepingJSON = null
     }
@@ -121,14 +114,30 @@ class AppContainer extends Component {
     })
     console.log(fileName)
   }
+ timeConverter = (unix_timestamp) =>{
+   var date = new Date(unix_timestamp*1000);
 
+   // Hours part from the timestamp
+   var hours = date.getHours();
+   // Minutes part from the timestamp
+   var minutes = "0" + date.getMinutes();
+   // Seconds part from the timestamp
+   var seconds = "0" + date.getSeconds();
+
+   // Will display time in 10:30:23 format
+   return (date);
+}
   loadTable = (elements) => {
+
       var table = document.getElementById("fileList");
       for (var x = 0;x<elements.length;x++){
         var row = table.insertRow(x+1)
         var fileNameCell = row.insertCell(0)
-        fileNameCell.innerHTML = elements[x]
-        var downloadCell = row.insertCell(1)
+        fileNameCell.innerHTML = elements[x]["fileMeta"]["name"]
+        var lastModCell = row.insertCell(1)
+
+        lastModCell.innerHTML = this.timeConverter(elements[x]["fileMeta"]["lastModified"])
+        var downloadCell = row.insertCell(2)
 
         var button = document.createElement('button')
 
@@ -161,10 +170,13 @@ handleFileUpload = evt => {
           newArray.push(escape(f.name))
           var table = document.getElementById("fileList");
 
-            var row = table.insertRow(1)
+            var row = table.insertRow(-1)
             var fileNameCell = row.insertCell(0)
             fileNameCell.innerHTML = escape(f.name)
-            var downloadCell = row.insertCell(1)
+            var lastModCell = row.insertCell(1)
+
+            lastModCell.innerHTML = this.timeConverter(f.lastModifiedDate.getTime().toString())
+            var downloadCell = row.insertCell(2)
 
             var button = document.createElement('button')
 
