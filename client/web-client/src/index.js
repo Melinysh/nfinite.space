@@ -10,14 +10,14 @@ import './styles/main.css';
 ReactDOM.render(
   /* beautify preserve:start */
   <div>
-    <div className = "titleWrapper">
+    <div className="titleWrapper">
       <div className="navElements">
-        <h4 onClick={()=>{  window.location.href = '/';}}
+        <h4 onClick={()=>{ window.location.href = '/'; }}
             className="navElement">
           Login Page
         </h4>
       </div>
-      <h1 className = "title">Nfinite Space</h1>
+      <h1 className="title">nfinite.space</h1>
     </div>
     <Router history={hashHistory}>
       <Route path="/"

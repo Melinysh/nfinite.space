@@ -1,0 +1,16 @@
+.INDICATOR {
+    width: 100px;
+    height: 100px;
+    pointer-events: none;
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    opacity: 0.75;
+    &_UP {
+    	background-color: #2196F3;
+    }
+    &_DOWN {
+    	background-color: #43A047;
+        left: 100px;
+    }
+}

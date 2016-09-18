@@ -8,10 +8,26 @@ export default function WebSocketPlus(server) {
   this.sendJSON = json => {
     ws.send(JSON.stringify(json));
     console.log("Sending JSON string:", JSON.stringify(json));
+
+    document.querySelector(".INDICATOR_UP").style.opacity = 1;
+    setTimeout(() => {
+      document.querySelector(".INDICATOR_UP").style.opacity = 0.5
+      setTimeout(() => {
+        document.querySelector(".INDICATOR_UP").style.opacity = 0
+      }, 500)
+    }, 500)
   }
   this.sendBuffer = ab => {
     ws.send(ab)
     console.log("Sending Buffer:", ab)
+
+    document.querySelector(".INDICATOR_UP").style.opacity = 1;
+    setTimeout(() => {
+      document.querySelector(".INDICATOR_UP").style.opacity = 0.5
+      setTimeout(() => {
+        document.querySelector(".INDICATOR_UP").style.opacity = 0
+      }, 500)
+    }, 500)
   }
 
   ws.onopen = () => {
@@ -24,6 +40,15 @@ export default function WebSocketPlus(server) {
   }
   ws.onmessage = (evt) => {
     console.log("Recieved Message:", evt.data);
+
+    document.querySelector(".INDICATOR_DOWN").style.opacity = 1;
+    setTimeout(() => {
+      document.querySelector(".INDICATOR_DOWN").style.opacity = 0.5
+      setTimeout(() => {
+        document.querySelector(".INDICATOR_DOWN").style.opacity = 0
+      }, 500)
+    }, 500)
+
     this.onMessage(evt);
   }
 
