@@ -43,7 +43,7 @@ type FilePartRequest struct {
 
 func fileFromMetaData(metadata map[string]interface{}) File {
 	seconds, _ := strconv.ParseInt(metadata["dateModified"].(string), 10, 64)
-	dateMod := time.Unix(seconds, 0)
+	dateMod := time.Unix(seconds/1000, 0)
 	name := metadata["name"].(string)
 	return File{FileMetaData{name, dateMod}, []byte("")}
 }
@@ -139,6 +139,11 @@ func listen(w http.ResponseWriter, r *http.Request) {
 					var reqCon *websocket.Conn = nil
 					i := 0
 					for reqCon == nil {
+						if i >= len(req.owners) {
+							// out of bounds
+							log.Panicln("No available peers to fetch part from.")
+							return
+						}
 						reqCon = connForClient(req.owners[i])
 						i += 1
 					}
@@ -180,7 +185,8 @@ func sendUsersFileMetaData(c *websocket.Conn) {
 	json := "{ \"type\" : \"fileList\", \"files\" : [ "
 	files := database.ClientsFiles(connections[c])
 	for i, f := range files {
-		json += "\"" + f.name + "\""
+		json += " { \"fileMeta\" : { "
+		json += "\"name\" : \"" + f.name + "\", \"lastModified\" : \"" + strconv.FormatInt(f.modified.Unix(), 10) + "\" } }"
 		if i != len(files)-1 {
 			json += ", "
 		}
