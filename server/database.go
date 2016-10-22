@@ -5,7 +5,7 @@ import (
 	"log"
 )
 
-// DbFile is a database repsentation of a File
+// DbFile is a database representation of a File
 type DbFile struct {
 	id       int
 	modified int

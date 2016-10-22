@@ -8,6 +8,43 @@ import (
 	_ "github.com/lib/pq"
 )
 
+/*
+	nfinite.space uses CockroachDB for a scalable, resilient SQL store. Here are the tables
+	and the corresponding schema along with the relationships.
+
+	Database: nfinite
+	Tables: Client, File, FilePart, PartLookup
+
+	Client: 	id SERIAL
+				username string PRIMARY KEY
+				password string
+
+	File: 		id SERIAL PRIMARY KEY
+		 		modified INT
+		 		name string
+		  		ownerId INT
+
+	FilePart:	id SERIAL PRIMARY KEY
+			 	parentId INT
+				name string
+			  	fileIndex INT  (sequence number of the file part when it was sharded)
+
+	PartLookup: id SERIAL PRIMARY KEY
+				partId INT
+				ownerId INT  (the ID of the Client storing the part, not the original owner)
+
+
+	Relationships:
+
+	+------+  ownerId  +----+ parentId +--------+
+	|Client| <-------- |File| <------  |FilePart|
+	+------+   1<-1    +----+	1<-1   +--------+
+		^								 ^
+		|  ownerId	+----------+  partId |
+		----------- |PartLookup| ---------
+		   1->many	+----------+  1->many
+*/
+
 // Database is a wrapper around the sql.DB object. To be used as a singleton
 type Database struct {
 	*sql.DB
@@ -120,6 +157,7 @@ func (db *Database) FilePartRequestsForFile(f File, owner Client) []FilePartRequ
 	return reqs
 }
 
+// dbClientForClient gets the saved DbClient for Client c
 func (db *Database) dbClientForClient(c Client) DbClient {
 	rows, err := db.Query("SELECT * FROM Client WHERE username=$1", c.username)
 	if err != nil {
@@ -132,6 +170,7 @@ func (db *Database) dbClientForClient(c Client) DbClient {
 	return NewDbClient(rows)
 }
 
+// dbClientForID gets the saved DbClient for the provided ID
 func (db *Database) dbClientForID(id int) DbClient {
 	rows, err := db.Query("SELECT * FROM Client WHERE id=$1", id)
 	if err != nil {
@@ -144,6 +183,7 @@ func (db *Database) dbClientForID(id int) DbClient {
 	return NewDbClient(rows)
 }
 
+// insertFilePart inserts relevant metadata about the storing of a FilePart
 func (db *Database) insertFilePart(fp FilePart, owner Client, storer DbClient) {
 	dbF := db.dbFileForClientFile(fp.parent, owner)
 	if _, err := db.Exec("INSERT INTO FilePart (parentId, name, fileIndex) VALUES ($1, $2, $3)", dbF.id, fp.name, fp.index); err != nil {
@@ -151,6 +191,7 @@ func (db *Database) insertFilePart(fp FilePart, owner Client, storer DbClient) {
 	}
 }
 
+// dbFilePartFromFilePath gets the DbFilePart corresponding to the provided FilePart from the database
 func (db *Database) dbFilePartFromFilePart(fp FilePart) DbFilePart {
 	rows, err := db.Query("SELECT * FROM FilePart WHERE name=$1 AND fileIndex=$2", fp.name, fp.index)
 	if err != nil {
@@ -164,6 +205,7 @@ func (db *Database) dbFilePartFromFilePart(fp FilePart) DbFilePart {
 
 }
 
+// dbFilePartsForDbFile returns a slice of DbFileParts from the database whose parent File is f
 func (db *Database) dbFilePartsForDbFile(f DbFile) []DbFilePart {
 	var parts []DbFilePart
 	rows, err := db.Query("SELECT * FROM FilePart WHERE parentId=$1 ORDER BY fileIndex ASC", f.id)
@@ -177,18 +219,19 @@ func (db *Database) dbFilePartsForDbFile(f DbFile) []DbFilePart {
 	return parts
 }
 
+// savePartLookup inserts a new file part lookup for the many-to-many relationship between Clients and FileParts
 func (db *Database) savePartLookup(dbFp DbFilePart, dbC DbClient) {
 	if _, err := db.Exec("INSERT INTO PartLookup (partId, ownerId) VALUES ($1, $2)", dbFp.id, dbC.id); err != nil {
 		log.Println("save part lookup:", err)
 	}
 }
 
+// dbClientsForDbFilePart returns a slice of DbClients that store a particular FilePart
 func (db *Database) dbClientsForDbFilePart(dbFp DbFilePart) []DbClient {
 	rows, err := db.Query("SELECT ownerId FROM PartLookup WHERE partId=$1", dbFp.id)
 	if err != nil {
 		log.Fatalln("Unable to get file for name", dbFp.name, ":", err)
 	}
-	//	defer rows.Close()
 	var dbClients []DbClient
 	ids := []int{}
 	for rows.Next() {
@@ -206,6 +249,7 @@ func (db *Database) dbClientsForDbFilePart(dbFp DbFilePart) []DbClient {
 	return dbClients
 }
 
+// dbFilesForClient gets a slice of all the DbFiles a Client stores with nfinite.space
 func (db *Database) dbFilesForClient(owner Client) []DbFile {
 	dbC := db.dbClientForClient(owner)
 	rows, err := db.Query("SELECT * FROM File WHERE ownerId=$1", dbC.id)
@@ -221,6 +265,7 @@ func (db *Database) dbFilesForClient(owner Client) []DbFile {
 
 }
 
+// dbFileForClientFile returns the corresponding DbFile for a Client c's File f
 func (db *Database) dbFileForClientFile(f File, c Client) DbFile {
 	dbC := db.dbClientForClient(c)
 	rows, err := db.Query("SELECT * FROM File WHERE name=$1 AND ownerId=$2", f.name, dbC.id)
@@ -234,6 +279,7 @@ func (db *Database) dbFileForClientFile(f File, c Client) DbFile {
 	return NewDbFile(rows)
 }
 
+// insertFileForDbClient inserts File f into the database for a given DbClient
 func (db *Database) insertFileForDbClient(f File, dbC DbClient) {
 	if _, err := db.Exec("INSERT INTO File (modified, name, ownerId) VALUES ($1, $2, $3)", f.modified.Unix(), f.name, dbC.id); err != nil {
 		log.Println("insert file for db client:", err)
