@@ -1,5 +1,5 @@
 // Package main implements the backend for nfinite.space service. It allows
-// for users to upload thier files, like in typical cloud storage, but nfinite.space
+// for users to upload their files, like in typical cloud storage, but nfinite.space
 // leverages other user's disk to store shard of the original file.
 package main
 
@@ -57,7 +57,7 @@ func connForClient(c Client) *websocket.Conn {
 	return nil
 }
 
-// Main listerner function for an accepted connection
+// Main listener function for an accepted connection
 func listen(w http.ResponseWriter, r *http.Request) {
 	c, err := upgradeToWebsocket(w, r)
 	if err != nil {
@@ -233,7 +233,7 @@ func shardFile(f File, c *websocket.Conn) {
 }
 
 // Get the FilePart fp from client connected over websocket c.
-// Use WaitGroup to hold until we've recieved the FilePart.
+// Use WaitGroup to hold until we've received the FilePart.
 func fetchPart(c *websocket.Conn, fp FilePart) FilePart {
 	json := "{\"type\" : \"request\", \"fileMeta\" : { \"name\" : \"" + fp.name + "\" } }"
 	if err := c.WriteMessage(websocket.TextMessage, []byte(json)); err != nil {
