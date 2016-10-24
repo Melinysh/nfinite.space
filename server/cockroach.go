@@ -36,13 +36,13 @@ import (
 
 	Relationships:
 
-	+------+  ownerId  +----+ parentId +--------+
-	|Client| <-------- |File| <------  |FilePart|
-	+------+   1<-1    +----+	1<-1   +--------+
-		^								 ^
-		|  ownerId	+----------+  partId |
-		----------- |PartLookup| ---------
-		   1->many	+----------+  1->many
+    +------+  ownerId  +----+ parentId +--------+
+    |Client| <-------- |File| <------  |FilePart|
+    +------+   1<-1    +----+   1<-1   +--------+
+        ^                                ^
+        |  ownerId	+----------+  partId |
+        ----------- |PartLookup| ---------
+         1->many    +----------+  1->many
 */
 
 // Database is a wrapper around the sql.DB object. To be used as a singleton
