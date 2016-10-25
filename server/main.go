@@ -65,6 +65,7 @@ func listen(w http.ResponseWriter, r *http.Request) {
 	}
 	defer func() {
 		c.Close()
+		delete(connections, c)
 	}()
 	for {
 		mt, message, err := c.ReadMessage()
@@ -121,8 +122,6 @@ func handleRegistration(m map[string]interface{}, c *websocket.Conn) {
 	connections[c] = client
 	database.AddClient(client)
 	sendUsersFileMetaData(c)
-
-	defer delete(connections, c)
 }
 
 // Handle request for a particular File
@@ -197,8 +196,11 @@ func getFileUpload(c *websocket.Conn, f File) (File, error) {
 		return File{}, errors.New("File doesn't exist in database")
 	}
 	f.data = message
-	database.InsertFile(f, connections[c])
-	return f, nil
+	if cli, ok := connections[c]; ok {
+		database.InsertFile(f, cli)
+		return f, nil
+	}
+	return f, errors.New("No client found for websocket on uploaded file")
 }
 
 // Shard File f and distribute it round-robin style to connected Clients
@@ -209,12 +211,20 @@ func shardFile(f File, c *websocket.Conn) {
 	i := 0
 	log.Println("Length of data is", len(f.data))
 	for con, cli := range connections {
+		// Don't send part back to owner
 		if con == c {
 			continue
 		}
+
+		// Edge case where integer division cuts off last bit
+		if splitAmount == len(f.data)-1 {
+			splitAmount++
+		}
+
 		log.Println("Begin: ", begin, " splitAmt: ", splitAmount)
 		fpData := f.data[begin:splitAmount]
 
+		// Create new file part
 		fp := FilePart{}
 		fp.name = hash(fmt.Sprintf("%s%v", f.name, con))
 		fp.parent = f
@@ -299,7 +309,7 @@ func hash(s string) string {
 func main() {
 	flag.Parse()
 	log.SetFlags(0)
-	http.HandleFunc("/websockets", listen)
+	http.HandleFunc("/", listen)
 	log.Println("Now listening...")
 	log.Fatal(http.ListenAndServe(*addr, nil))
 }
